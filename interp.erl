@@ -22,21 +22,32 @@ evaluate(['quote', Val], _Env) ->
     quote(Val);
 evaluate(['begin' | Exprs], Env) ->
     progn(Exprs, Env);
+evaluate(['if', Test, Yes], Env) ->
+    evaluate(['if', Test, Yes, []], Env);
+evaluate(['if', Test, Yes, No], Env) ->
+    alternate(Test, Yes, No, Env);
 evaluate([Head | Args], Env) ->
     application(Head, Args, Env);
 
-%% Atom
-evaluate(Symbol, Env) when is_atom(Symbol) ->
-    ref(Symbol, Env);
-
 %% Constants
 evaluate(Val, _Env) when is_boolean(Val);
-                        is_number(Val);
-                        is_binary(Val) ->
-    quote(Val).
+                         is_number(Val);
+                         is_binary(Val) ->
+    quote(Val);
+
+%% Atom
+evaluate(Symbol, Env) when is_atom(Symbol) ->
+    ref(Symbol, Env).
 
 quote(Val) ->
      Val.
+
+%% If then [else]
+alternate(Test, IfTrue, IfFalse, Env) ->
+    case evaluate(Test, Env) of
+        true -> evaluate(IfTrue, Env);
+        _    -> evaluate(IfFalse, Env)
+    end.
 
 %% A sequence of expressions
 progn([], _Env) ->
