@@ -1,6 +1,6 @@
 -module(interp).
 
--export([prog/1, prog/2]).
+-export([prog/1, prog/2, primitives/0]).
 
 prog(Prog) ->
     prog(Prog, []).
@@ -12,6 +12,8 @@ prog(Prog, Env) ->
 %%  - a list of terms, representing an application
 %%  - an atom, representing a variable reference
 %%  - a literal string (as a binary), boolean true or false, or number
+
+%% Values include those things quotable above, and processes.
 
 %% TODO : reader syntax (# and ')
 
@@ -26,6 +28,8 @@ evaluate(['if', Test, Yes], Env) ->
     evaluate(['if', Test, Yes, []], Env);
 evaluate(['if', Test, Yes, No], Env) ->
     alternate(Test, Yes, No, Env);
+evaluate(['spawn' | Body], Env) ->
+    thread(Body, Env);
 evaluate([Head | Args], Env) ->
     application(Head, Args, Env);
 
@@ -58,6 +62,11 @@ progn([H | T], Env) ->
     evaluate(H, Env),
     progn(T, Env).
 
+%% Spawns a process to run the body. Unlike progn, returns the process
+%% as a value, rather than the value of the last expression.
+thread(Body, Env) ->
+    spawn(fun () -> progn(Body, Env) end).
+
 %% A reference to the environment
 ref(Var, Env) ->
     env_get(Var, Env).
@@ -79,3 +88,8 @@ env_get(Var, Env) ->
 
 env_extend(Env, Names, Values) ->
     lists:zip(Names, Values) ++ Env.
+
+primitives() ->
+    [{send, fun ([Receiver, Msg]) -> Receiver ! Msg end},
+     {recv, fun ([]) -> receive Val -> Val end end},
+     {out, fun ([Term]) -> io:format("~w\n", [Term]) end}].

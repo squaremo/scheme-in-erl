@@ -8,4 +8,4 @@ main([Expr]) ->
 
 globals() ->
     [{'+', fun ([A, B]) -> A + B end},
-     {'-', fun ([A, B]) -> A - B end}].
+     {'-', fun ([A, B]) -> A - B end}] ++ interp:primitives().
