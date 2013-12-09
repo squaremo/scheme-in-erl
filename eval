@@ -1,0 +1,7 @@
+#! /usr/bin/env escript
+%% -*- erlang -*-
+
+main([Expr]) ->
+    Prog = grammar:parse(Expr),
+    Result = interp:prog(Prog),
+    io:format("~w\n", [Result]).
