@@ -1,4 +1,4 @@
-SRCS:=interp.erl grammar.erl compiler.erl
+SRCS:=interp.erl grammar.erl compiler.erl primitives.erl
 BEAMS:=$(patsubst %.erl,%.beam,$(SRCS))
 
 .PHONY: all clean
