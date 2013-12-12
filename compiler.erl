@@ -109,10 +109,20 @@ application(Head, Args0, Env) when is_atom(Head) ->
         end,
     {call, 0, F, [translate(A, Env) || A <- Args0]};
 
+%% left-left-lambda i.e., a 'let' form
+%% ((lambda (a b) (+ a b)) 1 2)
+application(['lambda', Args | Body], Values, Env) ->
+    Assigns = [assign(A, V, Env) ||
+                  {A, V} <- lists:zip(Args, Values)],
+    {block, 0, Assigns ++ body(Body, env_extend(Env, Args))};
+
 application(Head, Args0, Env) ->
     F = translate(Head, Env),
     Args = [translate(A, Env) || A <- Args0],
     {call, 0, F, Args}.
+
+assign(P, V, Env) ->
+    {match, 0, {var, 0, P}, translate(V, Env)}.
 
 %% A lambda abstraction
 abstraction(Args, Body, Env) ->

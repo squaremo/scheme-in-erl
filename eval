@@ -3,9 +3,5 @@
 
 main([Expr]) ->
     Prog = grammar:parse(Expr),
-    Result = interp:prog(Prog, globals()),
+    Result = compiler:compile(Prog),
     io:format("~w\n", [Result]).
-
-globals() ->
-    [{'+', fun ([A, B]) -> A + B end},
-     {'-', fun ([A, B]) -> A - B end}] ++ interp:primitives().
