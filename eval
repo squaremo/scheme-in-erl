@@ -3,5 +3,5 @@
 
 main([Expr]) ->
     Prog = grammar:parse(Expr),
-    Result = compiler:compile(Prog),
-    io:format("~w\n", [Result]).
+    Run = compiler:compile(Prog),
+    Run(fun (Result) -> io:format("~w\n", [Result]) end).

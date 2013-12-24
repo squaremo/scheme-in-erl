@@ -2,5 +2,8 @@
 
 -compile(export_all).
 
-'+'(A, B) ->
-    A + B.
+'+'(K, A, B) ->
+    K(A + B).
+
+'>'(K, A, B) ->
+    K(A > B).

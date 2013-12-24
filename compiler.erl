@@ -8,10 +8,13 @@
 %% a program corresponds to a module with one entry point, a thunk
 %% called 'entry'.
 program(Prog, Env) ->
+    KArg = 'k',
+    BodyCps = cps:program(KArg, Prog),
+    Body = body([BodyCps], env_extend(Env, [KArg])),
     [{attribute, 0, module, ?COMPILED_MOD},
-     {attribute, 0, export, [{enter, 0}]},
-     {function, 0, enter, 0,
-      [{clause, 0, [], [], body(Prog, Env)}]}].
+     {attribute, 0, export, [{enter, 1}]},
+     {function, 0, enter, 1,
+      [{clause, 0, [{var, 0, KArg}], [], Body}]}].
 
 compile(Exprs) ->
     compile(Exprs, []).
@@ -20,7 +23,7 @@ compile(Exprs, Env) ->
     Forms = program(Exprs, Env),
     {ok, Mod, Bin} = compile:forms(Forms),
     code:load_binary(Mod, "stdin", Bin),
-    Mod:enter().
+    fun Mod:enter/1.
 
 %% Lists, either application or special forms
 translate(['lambda', Args | Body], Env) ->
@@ -30,7 +33,7 @@ translate(['quote', Val], _Env) ->
 translate(['begin' | Exprs], Env) ->
     progn(Exprs, Env);
 translate(['if', Test, Yes], Env) ->
-    translate(['if', Test, Yes, []], Env);
+    alternate(Test, Yes, [], Env);
 translate(['if', Test, Yes, No], Env) ->
     alternate(Test, Yes, No, Env);
 translate([Head | Args], Env) ->
@@ -112,9 +115,14 @@ application(Head, Args0, Env) when is_atom(Head) ->
 %% left-left-lambda i.e., a 'let' form
 %% ((lambda (a b) (+ a b)) 1 2)
 application(['lambda', Args | Body], Values, Env) ->
-    Assigns = [assign(A, V, Env) ||
-                  {A, V} <- lists:zip(Args, Values)],
-    {block, 0, Assigns ++ body(Body, env_extend(Env, Args))};
+    case {length(Args), length(Values)} of
+        {L, L} ->
+            Assigns = [assign(A, V, Env) ||
+                          {A, V} <- lists:zip(Args, Values)],
+            {block, 0, Assigns ++ body(Body, env_extend(Env, Args))};
+        {_A, _B} ->
+            throw ({arity_mismatch, Args, Values})
+    end;
 
 application(Head, Args0, Env) ->
     F = translate(Head, Env),
@@ -128,7 +136,7 @@ assign(P, V, Env) ->
 abstraction(Args, Body, Env) ->
     {'fun', 0,
      {clauses, [{clause, 0, [{var, 0, V} || V <- Args], [],
-                 body(Body, env_extend(Args, Env))}]}}.
+                 body(Body, env_extend(Env, Args))}]}}.
 
 env_extend(Env, Names) ->
     Names ++ Env.
