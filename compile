@@ -1,0 +1,13 @@
+#! /usr/bin/env escript
+%% -*- erlang -*-
+
+main([Expr]) ->
+    Terms = grammar:parse(Expr),
+    Prog = compiler:program(Terms, []),
+    io:put_chars([pp(L) || L <- Prog]).
+
+
+pp(Attr = {attribute, _, _, _}) ->
+    erl_pp:attribute(Attr);
+pp(Func = {function, _, _, _, _}) ->
+    erl_pp:function(Func).
