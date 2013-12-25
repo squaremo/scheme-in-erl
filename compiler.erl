@@ -66,8 +66,8 @@ quote([H|T]) ->
 %% If then [else]
 alternate(Test, IfTrue, IfFalse, Env) ->
     {'case', 0, translate(Test, Env),
-     [{clause, 0, [{atom, 0, true}], [translate(IfTrue, Env)]},
-      {clause, 0, [{var, 0, '_'}], [translate(IfFalse, Env)]}]}.
+     [{clause, 0, [{atom, 0, true}], [], [translate(IfTrue, Env)]},
+      {clause, 0, [{var, 0, '_'}], [], [translate(IfFalse, Env)]}]}.
 
 %% A sequence of expressions
 progn(Exprs, Env) ->
