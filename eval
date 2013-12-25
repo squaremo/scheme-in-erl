@@ -4,4 +4,4 @@
 main([Expr]) ->
     Prog = grammar:parse(Expr),
     Result = compiler:compile(Prog),
-    io:format("~w\n", [Result]).
+    io:put_chars(pp:pp(Result)), io:nl().
