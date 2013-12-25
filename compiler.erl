@@ -56,7 +56,7 @@ quote(Val) when is_float(Val) ->
 quote(Val) when is_atom(Val) ->
     {atom, 0, Val};
 quote(Val) when is_binary(Val) ->
-    {bin, 0, [{bin_element, {string, 0, binary_to_list(Val)},
+    {bin, 0, [{bin_element, 0, {string, 0, binary_to_list(Val)},
                default, default}]};
 quote([]) ->
     {nil, 0};
