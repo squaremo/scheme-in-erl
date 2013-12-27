@@ -1,4 +1,5 @@
-SRCS:=interp.erl grammar.erl compiler.erl primitives.erl pp.erl
+PARSER:=grammar.erl
+SRCS:=$(PARSER) interp.erl compiler.erl primitives.erl pp.erl
 BEAMS:=$(patsubst %.erl,%.beam,$(SRCS))
 
 .PHONY: all clean
@@ -6,13 +7,12 @@ BEAMS:=$(patsubst %.erl,%.beam,$(SRCS))
 all: $(BEAMS)
 
 clean:
-	rm $(BEAMS)
-	rm grammar.erl
+	rm -f $(BEAMS) $(PARSER)
 
-$(BEAMS): $(SRCS)
-	erlc $(SRCS)
+%.beam: %.erl
+	erlc $<
 
-grammar.erl: neotoma/neotoma
+$(PARSER): neotoma/neotoma grammar.peg
 	neotoma/neotoma grammar.peg
 
 neotoma/neotoma:
