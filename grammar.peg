@@ -4,14 +4,19 @@ start <- expr* ws
 ws <- [ \t\n]*
 ;
 
-expr <- ws list
+expr <- ws quote
+      / ws quasiquote / ws unquote / ws unquotesplice
+      / ws readermacro
       / ws term
 `[_, Expr] = Node, Expr`;
+
+term <- atom / list;
+
+atom <- bool / string / number / symbol;
 
 list <- '(' expr* ws ')'
 `[_Open, Es, _, _Close] = Node, Es`;
 
-term <- bool / string / number / symbol;
 
 bool <- true / false;
 
@@ -42,3 +47,19 @@ exp <- e digit+ ~;
 e <- [eE] ('+' / '-')? ~;
 non_zero_digit <- [1-9] ~;
 digit <- [0-9] ~;
+
+quote <- "'" term
+`[_, Term] = Node, [quote, Term]`;
+
+quasiquote <- '`' term
+`[_, Term] = Node, [quasiquote, Term]`;
+
+unquote <- ',' term
+`[_, Term] = Node, [unquote, Term]`;
+
+unquotesplice <- '@,' term
+`[_, Term] = Node, ['unquote-splice', Term]`;
+
+readermacro <- '#' [a-zA-z0-9]+ list
+`[_, Sigil, Term] = Node,
+ [hashquote, binary_to_atom(iolist_to_binary(Sigil), utf8), Term]`;
