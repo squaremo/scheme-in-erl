@@ -6,7 +6,7 @@
 next_name(N) ->
     receive P ->
             NChars = integer_to_list(N),
-            P ! list_to_atom("gensym." ++ NChars)
+            P ! "gensym." ++ NChars
     end,
     next_name(N + 1).
 
@@ -15,12 +15,19 @@ start() ->
     put(namer, Namer).
 
 newname() ->
+    newname("").
+
+newname(Prefix) when is_atom(Prefix) ->
+    newname(atom_to_list(Prefix));
+newname(Prefix) ->
     case get(namer) of
         undefined ->
             start(),
-            newname();
+            newname(Prefix);
         P -> P ! self(),
-             receive V -> V end
+             receive V ->
+                     list_to_atom(Prefix ++ [$$ | V])
+             end
     end.
 
 program(K, Exprs) ->
@@ -48,7 +55,7 @@ transform(K, Symbol) when is_atom(Symbol) ->
 %% (lambda (a b) (+ a b)) ->
 %% (k (lambda (k1 a b) (k1 (+ a b))))
 abstraction(K, Args, Body) ->
-    K1 = newname(),
+    K1 = newname(k),
     [K, ['lambda', [K1 | Args] | [body(K1, Body)]]].
 
 const(K, List) when is_list(List) ->
@@ -57,8 +64,9 @@ const(K, Val) ->
     [K, Val].
 
 alternate(K, Test, True, False) ->
-    K1 = ['lambda', ['V'],
-          ['if', 'V',
+    V = newname(v),
+    K1 = ['lambda', [V],
+          ['if', V,
            transform(K, True),
            transform(K, False)]],
     transform(K1, Test).
@@ -68,7 +76,8 @@ application(K, Head, Args) ->
     application(K, Head, Args, []).
 
 application(K, Head, [], ArgVars) ->
-    K1 = ['lambda', ['F'], ['F', K | lists:reverse(ArgVars)]],
+    F = newname(f),
+    K1 = ['lambda', [F], [F, K | lists:reverse(ArgVars)]],
     transform(K1, Head);
 application(K, Head, [Arg | Rest], ArgVars) ->
     ArgVar = newname(),

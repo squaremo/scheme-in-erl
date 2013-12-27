@@ -8,7 +8,7 @@
 %% a program corresponds to a module with one entry point, a thunk
 %% called 'entry'.
 program(Prog, Env) ->
-    KArg = 'k',
+    KArg = '$topk',
     BodyCps = cps:program(KArg, Prog),
     Body = body([BodyCps], env_extend(Env, [KArg])),
     [{attribute, 0, module, ?COMPILED_MOD},
