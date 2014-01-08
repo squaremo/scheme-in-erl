@@ -3,5 +3,7 @@
 
 main([Expr]) ->
     Prog = grammar:parse(Expr),
-    Result = compiler:compile(Prog),
-    io:put_chars(pp:pp(Result)), io:nl().
+    Run = compiler:compile(Prog),
+    Run(fun (Result) ->
+                io:put_chars(pp:pp(Result)), io:nl()
+        end).

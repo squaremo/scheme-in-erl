@@ -1,5 +1,5 @@
 PARSER:=grammar.erl
-SRCS:=$(PARSER) interp.erl compiler.erl primitives.erl pp.erl
+SRCS:=$(PARSER) interp.erl compiler.erl primitives.erl cps.erl pp.erl
 BEAMS:=$(patsubst %.erl,%.beam,$(SRCS))
 
 .PHONY: all clean
