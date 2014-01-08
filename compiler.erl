@@ -4,23 +4,30 @@
 
 -define(COMPILED_MOD, '$compiled').
 
+-include_lib("compiler/src/core_parse.hrl").
+
 %% Make a module def out of a body (list of expressions).  In my case
 %% a program corresponds to a module with one entry point, a thunk
 %% called 'entry'.
 program(Prog, Env) ->
-    [{attribute, 0, module, ?COMPILED_MOD},
-     {attribute, 0, export, [{enter, 0}]},
-     {function, 0, enter, 0,
-      [{clause, 0, [], [], body(Prog, Env)}]}].
+    Enter = #c_fun{
+      vars = [],
+      body = body(Prog, Env)
+     },
+    #c_module{ name = #c_literal{ val = ?COMPILED_MOD },
+               exports = [#c_var{ name = {'enter', 0} }],
+               attrs = [],
+               defs = [{#c_var{ name = {'enter', 0} },
+                        Enter}] }.
 
 compile(Exprs) ->
     compile(Exprs, []).
 
 compile(Exprs, Env) ->
     Forms = program(Exprs, Env),
-    {ok, Mod, Bin} = compile:forms(Forms),
-    code:load_binary(Mod, "stdin", Bin),
-    Mod:enter().
+    {ok, _, Bin} = compile:forms(Forms, [from_core,binary]),
+    code:load_binary(?COMPILED_MOD, "stdin", Bin),
+    ?COMPILED_MOD:enter().
 
 %% Lists, either application or special forms
 translate(['lambda', Args | Body], Env) ->
@@ -46,89 +53,102 @@ translate(Val, _Env) when is_boolean(Val);
 translate(Symbol, Env) when is_atom(Symbol) ->
     ref(Symbol, Env).
 
-body(Exprs, Env) ->
-    [translate(E, Env) || E <- Exprs].
+body([], _Env) ->
+    #c_literal{ val = undefined };
+body([Expr], Env) ->
+    translate(Expr, Env);
+body([Expr | Exprs], Env) ->
+    #c_seq{
+      arg = translate(Expr, Env),
+      body = body(Exprs, Env)
+     }.
 
 quote(Val) when is_integer(Val) ->
-    {integer, 0, Val};
+    #c_literal{ val = Val };
 quote(Val) when is_float(Val) ->
-    {float, 0, Val};
+    #c_literal{ val = Val };
 quote(Val) when is_atom(Val) ->
-    {atom, 0, Val};
+    #c_literal{ val = Val };
 quote(Val) when is_binary(Val) ->
-    {bin, 0, [{bin_element, 0, {string, 0, binary_to_list(Val)},
-               default, default}]};
-quote([]) ->
-    {nil, 0};
-quote([H|T]) ->
-    {cons, 0, quote(H), quote(T)}.
+    #c_literal{ val = Val };
+quote(Val) when is_list(Val) ->
+    #c_literal{ val = Val }.
 
 %% If then [else]
 alternate(Test, IfTrue, IfFalse, Env) ->
-    {'case', 0, translate(Test, Env),
-     [{clause, 0, [{atom, 0, true}], [], [translate(IfTrue, Env)]},
-      {clause, 0, [{var, 0, '_'}], [], [translate(IfFalse, Env)]}]}.
+    #c_case{ arg = translate(Test, Env),
+             clauses =
+             [
+              #c_clause{ pats = [#c_literal{ val = true }],
+                         guard = #c_literal{ val = true }, %% ??
+                         body = translate(IfTrue, Env) },
+              #c_clause{ pats = [#c_literal{ val = false }],
+                         guard = #c_literal{ val = true }, %% ??
+                         body = translate(IfFalse, Env) }]}.
 
 %% A sequence of expressions
 progn(Exprs, Env) ->
-    {block, 0, body(Exprs, Env)}.
+    body(Exprs, Env).
 
 %% A reference in arg position (i.e., not as the head of an
 %% expression)
 ref(Var, Env) ->
     case find_var(Var, Env) of
         {local, Var} ->
-            {var, 0, Var};
+            #c_var{ name = Var };
         _ ->
             case find_primitive(Var) of
                 {prim, Mod, Fun, Arity} ->
-                    {'fun', 0, {function, {atom, 0, Mod},
-                                {atom, 0, Fun},
-                                {integer, 0, Arity}}};
-                _ -> {unknown, Var}
+                    %% In let forms this could be avoided
+                    #c_call{ module = #c_literal{ val = 'erlang' },
+                             name = #c_literal{ val = 'make_fun' },
+                             args = [#c_literal{ val = Mod },
+                                     #c_literal{ val = Fun },
+                                     #c_literal{ val = Arity}] };
+                _ -> throw({unknown, Var})
             end
     end.
 
 %% An application of a function to arguments
 application(Head, Args0, Env) when is_atom(Head) ->
-    F = case find_var(Head, Env) of
-            {local, Var} ->
-                {var, 0, Var};
-            %% no globals yet
-            _ ->
-                Arity = length(Args0),
-                case find_primitive(Head) of
-                    {prim, Mod, Fun, Arity} ->
-                        {remote, 0,
-                         {atom, 0, Mod},
-                         {atom, 0, Fun}};
-                    {prim, _Mod, _Fun, Ar1} ->
-                        throw ({wrong_arity, Head, Arity, Ar1});
-                    _ -> throw({unknown, Head})
-                end
-        end,
-    {call, 0, F, [translate(A, Env) || A <- Args0]};
+    Args = [translate(A, Env) || A <- Args0],
+    case find_var(Head, Env) of
+        {local, Var} ->
+            #c_apply{ op = #c_var{ name = Var },
+                      args = Args };
+        %% no globals yet
+        _ ->
+            Arity = length(Args0),
+            case find_primitive(Head) of
+                {prim, Mod, Fun, Arity} ->
+                    #c_call{ module = #c_literal{ val = Mod },
+                             name = #c_literal{ val = Fun },
+                             args = Args };
+                {prim, _Mod, _Fun, Ar1} ->
+                    throw ({wrong_arity, Head, Arity, Ar1});
+                _ ->
+                    throw({unknown, Head})
+            end
+    end;
 
 %% left-left-lambda i.e., a 'let' form
 %% ((lambda (a b) (+ a b)) 1 2)
 application(['lambda', Args | Body], Values, Env) ->
-    Assigns = [assign(A, V, Env) ||
-                  {A, V} <- lists:zip(Args, Values)],
-    {block, 0, Assigns ++ body(Body, env_extend(Env, Args))};
+    #c_let{ vars = [#c_var{ name = A } || A <- Args],
+            arg = #c_values{
+              es = [translate(V, Env) || V <- Values] },
+            body = body(Body, env_extend(Env, Args)) };
 
+%% Erm, is this ever reached?
 application(Head, Args0, Env) ->
     F = translate(Head, Env),
     Args = [translate(A, Env) || A <- Args0],
-    {call, 0, F, Args}.
-
-assign(P, V, Env) ->
-    {match, 0, {var, 0, P}, translate(V, Env)}.
+    #c_apply{ op = F, args = Args }.
 
 %% A lambda abstraction
 abstraction(Args, Body, Env) ->
-    {'fun', 0,
-     {clauses, [{clause, 0, [{var, 0, V} || V <- Args], [],
-                 body(Body, env_extend(Args, Env))}]}}.
+    #c_fun{ vars = [#c_var{ name = A } || A <- Args],
+            body = body(Body, env_extend(Args, Env)) }.
 
 env_extend(Env, Names) ->
     Names ++ Env.
@@ -138,7 +158,7 @@ find_var(Var, Env) ->
         true -> {local, Var};
         _ -> case find_primitive(Var) of
                  Res = {prim, _Mod, _Var, _Arity} -> Res;
-                 _ -> {unknown, Var}
+                 _ -> throw({unknown, Var})
              end
     end.
 

@@ -4,10 +4,7 @@
 main([Expr]) ->
     Terms = grammar:parse(Expr),
     Prog = compiler:program(Terms, []),
-    io:put_chars([pp(L) || L <- Prog]).
-
-
-pp(Attr = {attribute, _, _, _}) ->
-    erl_pp:attribute(Attr);
-pp(Func = {function, _, _, _, _}) ->
-    erl_pp:function(Func).
+% ff line may be useful to see if a generated cerl() might be
+% malformed
+% io:format("~w", [Prog]), io:nl().
+    io:put_chars(core_pp:format(Prog)), io:nl().
