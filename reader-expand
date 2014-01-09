@@ -1,0 +1,6 @@
+#! /usr/bin/env escript
+%% -*- erlang -*-
+
+main([Expr]) ->
+    Terms = grammar:parse(Expr),
+    io:put_chars([[pp:pp(Term, false), "\n\n"] || Term <- Terms]).
